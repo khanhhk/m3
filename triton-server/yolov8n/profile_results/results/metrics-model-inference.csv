@@ -1,0 +1,12 @@
+Model,Batch,Concurrency,Model Config Path,Instance Group,Max Batch Size,Satisfies Constraints,Throughput (infer/sec),p99 Latency (ms)
+yolov8n,1,2,yolov8n_config_0,1:GPU,1,Yes,121.9,23.0
+yolov8n,1,1,yolov8n_config_0,1:GPU,1,Yes,77.9,17.5
+yolov8n,1,2,yolov8n_config_1,1:GPU,2,Yes,121.3,22.7
+yolov8n,1,1,yolov8n_config_1,1:GPU,2,Yes,87.3,15.6
+yolov8n,1,2,yolov8n_config_3,2:GPU,2,Yes,109.9,25.9
+yolov8n,1,1,yolov8n_config_3,2:GPU,2,Yes,68.9,19.4
+yolov8n,1,2,yolov8n_config_2,2:GPU,1,Yes,104.3,28.2
+yolov8n,1,1,yolov8n_config_2,2:GPU,1,Yes,73.3,18.8
+yolov8n,1,2,yolov8n_config_default,1:CPU,8,Yes,25.6,96.6
+yolov8n,1,1,yolov8n_config_default,1:CPU,8,Yes,23.4,60.0
+

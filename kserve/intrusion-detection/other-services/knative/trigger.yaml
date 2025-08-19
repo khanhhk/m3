@@ -1,0 +1,15 @@
+apiVersion: eventing.knative.dev/v1
+kind: Trigger
+metadata:
+  name: hello-display
+  namespace: eventing-test
+spec:
+  broker: default
+  # filter:
+  #   attributes:
+  #     type: io.seldon.serving.inference.response # Enable it to filter seldon event only
+  subscriber:
+    ref:
+     apiVersion: v1
+     kind: Service
+     name: hello-display # Service hello-display subscribes to the broker `default`

@@ -1,0 +1,601 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: house-price-training-
+  annotations: {pipelines.kubeflow.org/kfp_sdk_version: 1.8.22, pipelines.kubeflow.org/pipeline_compilation_time: '2023-11-27T21:47:26.506018',
+    pipelines.kubeflow.org/pipeline_spec: '{"description": "Training models to predict
+      house price.", "inputs": [{"name": "url"}], "name": "House price training"}'}
+  labels: {pipelines.kubeflow.org/kfp_sdk_version: 1.8.22}
+spec:
+  entrypoint: house-price-training
+  templates:
+  - name: evaluate
+    container:
+      args: [--X-test, /tmp/inputs/X_test/data, --y-test, /tmp/inputs/y_test/data,
+        --clf, /tmp/inputs/clf/data, --y-test-pred, /tmp/outputs/y_test_pred/data,
+        '----output-paths', /tmp/outputs/mlpipeline_metrics/data]
+      command:
+      - sh
+      - -c
+      - (PIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location
+        'scikit-learn==1.0.2' 'joblib==1.1.0' 'pandas==1.3.5' || PIP_DISABLE_PIP_VERSION_CHECK=1
+        python3 -m pip install --quiet --no-warn-script-location 'scikit-learn==1.0.2'
+        'joblib==1.1.0' 'pandas==1.3.5' --user) && "$0" "$@"
+      - sh
+      - -ec
+      - |
+        program_path=$(mktemp)
+        printf "%s" "$0" > "$program_path"
+        python3 -u "$program_path" "$@"
+      - |
+        def _make_parent_dirs_and_return_path(file_path: str):
+            import os
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            return file_path
+
+        def evaluate(
+            X_test_path,
+            y_test_path,
+            clf_path,
+            y_test_pred_path,
+        ):
+            import joblib
+            from sklearn.metrics import r2_score
+            import json
+
+            # load data
+            X_test = joblib.load(X_test_path)
+            y_test = joblib.load(y_test_path)
+
+            # load model
+            clf = joblib.load(clf_path)
+
+            # make prediction on the test data
+            y_test_pred = clf.predict(X_test)
+
+            joblib.dump(y_test_pred, y_test_pred_path)
+
+            # evaluate on the test data
+            metrics = {
+                "metrics": [
+                    {
+                        "name": "r2_score",  # The name of the metric. Visualized as the column name in the runs table.
+                        "numberValue": r2_score(
+                            y_test, y_test_pred
+                        ),  # The value of the metric. Must be a numeric value.
+                        "format": "RAW",  # The optional format of the metric. Supported values are "RAW" (displayed in raw format) and "PERCENTAGE" (displayed in percentage format).
+                    }
+                ]
+            }
+            return [json.dumps(metrics)]
+
+        import argparse
+        _parser = argparse.ArgumentParser(prog='Evaluate', description='')
+        _parser.add_argument("--X-test", dest="X_test_path", type=str, required=True, default=argparse.SUPPRESS)
+        _parser.add_argument("--y-test", dest="y_test_path", type=str, required=True, default=argparse.SUPPRESS)
+        _parser.add_argument("--clf", dest="clf_path", type=str, required=True, default=argparse.SUPPRESS)
+        _parser.add_argument("--y-test-pred", dest="y_test_pred_path", type=_make_parent_dirs_and_return_path, required=True, default=argparse.SUPPRESS)
+        _parser.add_argument("----output-paths", dest="_output_paths", type=str, nargs=1)
+        _parsed_args = vars(_parser.parse_args())
+        _output_files = _parsed_args.pop("_output_paths", [])
+
+        _outputs = evaluate(**_parsed_args)
+
+        _output_serializers = [
+            str,
+
+        ]
+
+        import os
+        for idx, output_file in enumerate(_output_files):
+            try:
+                os.makedirs(os.path.dirname(output_file))
+            except OSError:
+                pass
+            with open(output_file, 'w') as f:
+                f.write(_output_serializers[idx](_outputs[idx]))
+      image: python:3.7
+    inputs:
+      artifacts:
+      - {name: prepare-data-X_test, path: /tmp/inputs/X_test/data}
+      - {name: train-clf, path: /tmp/inputs/clf/data}
+      - {name: prepare-data-y_test, path: /tmp/inputs/y_test/data}
+    outputs:
+      artifacts:
+      - {name: mlpipeline-metrics, path: /tmp/outputs/mlpipeline_metrics/data}
+      - {name: evaluate-y_test_pred, path: /tmp/outputs/y_test_pred/data}
+    metadata:
+      labels:
+        pipelines.kubeflow.org/kfp_sdk_version: 1.8.22
+        pipelines.kubeflow.org/pipeline-sdk-type: kfp
+        pipelines.kubeflow.org/enable_caching: "true"
+      annotations: {pipelines.kubeflow.org/component_spec: '{"implementation": {"container":
+          {"args": ["--X-test", {"inputPath": "X_test"}, "--y-test", {"inputPath":
+          "y_test"}, "--clf", {"inputPath": "clf"}, "--y-test-pred", {"outputPath":
+          "y_test_pred"}, "----output-paths", {"outputPath": "mlpipeline_metrics"}],
+          "command": ["sh", "-c", "(PIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip
+          install --quiet --no-warn-script-location ''scikit-learn==1.0.2'' ''joblib==1.1.0''
+          ''pandas==1.3.5'' || PIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install
+          --quiet --no-warn-script-location ''scikit-learn==1.0.2'' ''joblib==1.1.0''
+          ''pandas==1.3.5'' --user) && \"$0\" \"$@\"", "sh", "-ec", "program_path=$(mktemp)\nprintf
+          \"%s\" \"$0\" > \"$program_path\"\npython3 -u \"$program_path\" \"$@\"\n",
+          "def _make_parent_dirs_and_return_path(file_path: str):\n    import os\n    os.makedirs(os.path.dirname(file_path),
+          exist_ok=True)\n    return file_path\n\ndef evaluate(\n    X_test_path,\n    y_test_path,\n    clf_path,\n    y_test_pred_path,\n):\n    import
+          joblib\n    from sklearn.metrics import r2_score\n    import json\n\n    #
+          load data\n    X_test = joblib.load(X_test_path)\n    y_test = joblib.load(y_test_path)\n\n    #
+          load model\n    clf = joblib.load(clf_path)\n\n    # make prediction on
+          the test data\n    y_test_pred = clf.predict(X_test)\n\n    joblib.dump(y_test_pred,
+          y_test_pred_path)\n\n    # evaluate on the test data\n    metrics = {\n        \"metrics\":
+          [\n            {\n                \"name\": \"r2_score\",  # The name of
+          the metric. Visualized as the column name in the runs table.\n                \"numberValue\":
+          r2_score(\n                    y_test, y_test_pred\n                ),  #
+          The value of the metric. Must be a numeric value.\n                \"format\":
+          \"RAW\",  # The optional format of the metric. Supported values are \"RAW\"
+          (displayed in raw format) and \"PERCENTAGE\" (displayed in percentage format).\n            }\n        ]\n    }\n    return
+          [json.dumps(metrics)]\n\nimport argparse\n_parser = argparse.ArgumentParser(prog=''Evaluate'',
+          description='''')\n_parser.add_argument(\"--X-test\", dest=\"X_test_path\",
+          type=str, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"--y-test\",
+          dest=\"y_test_path\", type=str, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"--clf\",
+          dest=\"clf_path\", type=str, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"--y-test-pred\",
+          dest=\"y_test_pred_path\", type=_make_parent_dirs_and_return_path, required=True,
+          default=argparse.SUPPRESS)\n_parser.add_argument(\"----output-paths\", dest=\"_output_paths\",
+          type=str, nargs=1)\n_parsed_args = vars(_parser.parse_args())\n_output_files
+          = _parsed_args.pop(\"_output_paths\", [])\n\n_outputs = evaluate(**_parsed_args)\n\n_output_serializers
+          = [\n    str,\n\n]\n\nimport os\nfor idx, output_file in enumerate(_output_files):\n    try:\n        os.makedirs(os.path.dirname(output_file))\n    except
+          OSError:\n        pass\n    with open(output_file, ''w'') as f:\n        f.write(_output_serializers[idx](_outputs[idx]))\n"],
+          "image": "python:3.7"}}, "inputs": [{"name": "X_test", "type": "PKL"}, {"name":
+          "y_test", "type": "PKL"}, {"name": "clf", "type": "Model"}], "name": "Evaluate",
+          "outputs": [{"name": "y_test_pred", "type": "PKL"}, {"name": "mlpipeline_metrics",
+          "type": "Metrics"}]}', pipelines.kubeflow.org/component_ref: '{}'}
+  - name: house-price-training
+    inputs:
+      parameters:
+      - {name: url}
+    dag:
+      tasks:
+      - name: evaluate
+        template: evaluate
+        dependencies: [prepare-data, train]
+        arguments:
+          artifacts:
+          - {name: prepare-data-X_test, from: '{{tasks.prepare-data.outputs.artifacts.prepare-data-X_test}}'}
+          - {name: prepare-data-y_test, from: '{{tasks.prepare-data.outputs.artifacts.prepare-data-y_test}}'}
+          - {name: train-clf, from: '{{tasks.train.outputs.artifacts.train-clf}}'}
+      - name: prepare-data
+        template: prepare-data
+        arguments:
+          parameters:
+          - {name: url, value: '{{inputs.parameters.url}}'}
+      - name: train
+        template: train
+        dependencies: [prepare-data]
+        arguments:
+          artifacts:
+          - {name: prepare-data-X_train, from: '{{tasks.prepare-data.outputs.artifacts.prepare-data-X_train}}'}
+          - {name: prepare-data-X_val, from: '{{tasks.prepare-data.outputs.artifacts.prepare-data-X_val}}'}
+          - {name: prepare-data-y_train, from: '{{tasks.prepare-data.outputs.artifacts.prepare-data-y_train}}'}
+          - {name: prepare-data-y_val, from: '{{tasks.prepare-data.outputs.artifacts.prepare-data-y_val}}'}
+      - name: visualize
+        template: visualize
+        dependencies: [evaluate, prepare-data]
+        arguments:
+          artifacts:
+          - {name: evaluate-y_test_pred, from: '{{tasks.evaluate.outputs.artifacts.evaluate-y_test_pred}}'}
+          - {name: prepare-data-X_test, from: '{{tasks.prepare-data.outputs.artifacts.prepare-data-X_test}}'}
+          - {name: prepare-data-y_test, from: '{{tasks.prepare-data.outputs.artifacts.prepare-data-y_test}}'}
+  - name: prepare-data
+    container:
+      args: [--url, '{{inputs.parameters.url}}', --X-train, /tmp/outputs/X_train/data,
+        --y-train, /tmp/outputs/y_train/data, --X-val, /tmp/outputs/X_val/data, --y-val,
+        /tmp/outputs/y_val/data, --X-test, /tmp/outputs/X_test/data, --y-test, /tmp/outputs/y_test/data]
+      command:
+      - sh
+      - -c
+      - (PIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location
+        'scikit-learn==1.0.2' 'joblib==1.1.0' 'pandas==1.3.5' 'wget==3.2' || PIP_DISABLE_PIP_VERSION_CHECK=1
+        python3 -m pip install --quiet --no-warn-script-location 'scikit-learn==1.0.2'
+        'joblib==1.1.0' 'pandas==1.3.5' 'wget==3.2' --user) && "$0" "$@"
+      - sh
+      - -ec
+      - |
+        program_path=$(mktemp)
+        printf "%s" "$0" > "$program_path"
+        python3 -u "$program_path" "$@"
+      - |
+        def _make_parent_dirs_and_return_path(file_path: str):
+            import os
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            return file_path
+
+        def prepare_data(
+            url,
+            X_train_path,
+            y_train_path,
+            X_val_path,
+            y_val_path,
+            X_test_path,
+            y_test_path,
+        ):
+            import pandas as pd
+            import wget
+            from sklearn.model_selection import train_test_split
+            import joblib
+
+            # Download housing.csv to local
+            wget.download(url)
+
+            # Create X and y
+            df = pd.read_csv("housing.csv")
+            X = df.drop(columns=["price"])
+            y = df["price"]
+
+            # Create train and test set
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y, test_size=0.1, random_state=42
+            )
+
+            # Continue to split train set into train and validation sets
+            X_train, X_val, y_train, y_val = train_test_split(
+                X_train, y_train, test_size=0.1, random_state=42
+            )
+
+            # Dump data to pkl for downstream components to use
+            joblib.dump(X_train, X_train_path)
+            joblib.dump(y_train, y_train_path)
+            joblib.dump(X_val, X_val_path)
+            joblib.dump(y_val, y_val_path)
+            joblib.dump(X_test, X_test_path)
+            joblib.dump(y_test, y_test_path)
+
+        import argparse
+        _parser = argparse.ArgumentParser(prog='Prepare data', description='')
+        _parser.add_argument("--url", dest="url", type=str, required=True, default=argparse.SUPPRESS)
+        _parser.add_argument("--X-train", dest="X_train_path", type=_make_parent_dirs_and_return_path, required=True, default=argparse.SUPPRESS)
+        _parser.add_argument("--y-train", dest="y_train_path", type=_make_parent_dirs_and_return_path, required=True, default=argparse.SUPPRESS)
+        _parser.add_argument("--X-val", dest="X_val_path", type=_make_parent_dirs_and_return_path, required=True, default=argparse.SUPPRESS)
+        _parser.add_argument("--y-val", dest="y_val_path", type=_make_parent_dirs_and_return_path, required=True, default=argparse.SUPPRESS)
+        _parser.add_argument("--X-test", dest="X_test_path", type=_make_parent_dirs_and_return_path, required=True, default=argparse.SUPPRESS)
+        _parser.add_argument("--y-test", dest="y_test_path", type=_make_parent_dirs_and_return_path, required=True, default=argparse.SUPPRESS)
+        _parsed_args = vars(_parser.parse_args())
+
+        _outputs = prepare_data(**_parsed_args)
+      image: python:3.7
+    inputs:
+      parameters:
+      - {name: url}
+    outputs:
+      artifacts:
+      - {name: prepare-data-X_test, path: /tmp/outputs/X_test/data}
+      - {name: prepare-data-X_train, path: /tmp/outputs/X_train/data}
+      - {name: prepare-data-X_val, path: /tmp/outputs/X_val/data}
+      - {name: prepare-data-y_test, path: /tmp/outputs/y_test/data}
+      - {name: prepare-data-y_train, path: /tmp/outputs/y_train/data}
+      - {name: prepare-data-y_val, path: /tmp/outputs/y_val/data}
+    metadata:
+      labels:
+        pipelines.kubeflow.org/kfp_sdk_version: 1.8.22
+        pipelines.kubeflow.org/pipeline-sdk-type: kfp
+        pipelines.kubeflow.org/enable_caching: "true"
+      annotations: {pipelines.kubeflow.org/component_spec: '{"implementation": {"container":
+          {"args": ["--url", {"inputValue": "url"}, "--X-train", {"outputPath": "X_train"},
+          "--y-train", {"outputPath": "y_train"}, "--X-val", {"outputPath": "X_val"},
+          "--y-val", {"outputPath": "y_val"}, "--X-test", {"outputPath": "X_test"},
+          "--y-test", {"outputPath": "y_test"}], "command": ["sh", "-c", "(PIP_DISABLE_PIP_VERSION_CHECK=1
+          python3 -m pip install --quiet --no-warn-script-location ''scikit-learn==1.0.2''
+          ''joblib==1.1.0'' ''pandas==1.3.5'' ''wget==3.2'' || PIP_DISABLE_PIP_VERSION_CHECK=1
+          python3 -m pip install --quiet --no-warn-script-location ''scikit-learn==1.0.2''
+          ''joblib==1.1.0'' ''pandas==1.3.5'' ''wget==3.2'' --user) && \"$0\" \"$@\"",
+          "sh", "-ec", "program_path=$(mktemp)\nprintf \"%s\" \"$0\" > \"$program_path\"\npython3
+          -u \"$program_path\" \"$@\"\n", "def _make_parent_dirs_and_return_path(file_path:
+          str):\n    import os\n    os.makedirs(os.path.dirname(file_path), exist_ok=True)\n    return
+          file_path\n\ndef prepare_data(\n    url,\n    X_train_path,\n    y_train_path,\n    X_val_path,\n    y_val_path,\n    X_test_path,\n    y_test_path,\n):\n    import
+          pandas as pd\n    import wget\n    from sklearn.model_selection import train_test_split\n    import
+          joblib\n\n    # Download housing.csv to local\n    wget.download(url)\n\n    #
+          Create X and y\n    df = pd.read_csv(\"housing.csv\")\n    X = df.drop(columns=[\"price\"])\n    y
+          = df[\"price\"]\n\n    # Create train and test set\n    X_train, X_test,
+          y_train, y_test = train_test_split(\n        X, y, test_size=0.1, random_state=42\n    )\n\n    #
+          Continue to split train set into train and validation sets\n    X_train,
+          X_val, y_train, y_val = train_test_split(\n        X_train, y_train, test_size=0.1,
+          random_state=42\n    )\n\n    # Dump data to pkl for downstream components
+          to use\n    joblib.dump(X_train, X_train_path)\n    joblib.dump(y_train,
+          y_train_path)\n    joblib.dump(X_val, X_val_path)\n    joblib.dump(y_val,
+          y_val_path)\n    joblib.dump(X_test, X_test_path)\n    joblib.dump(y_test,
+          y_test_path)\n\nimport argparse\n_parser = argparse.ArgumentParser(prog=''Prepare
+          data'', description='''')\n_parser.add_argument(\"--url\", dest=\"url\",
+          type=str, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"--X-train\",
+          dest=\"X_train_path\", type=_make_parent_dirs_and_return_path, required=True,
+          default=argparse.SUPPRESS)\n_parser.add_argument(\"--y-train\", dest=\"y_train_path\",
+          type=_make_parent_dirs_and_return_path, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"--X-val\",
+          dest=\"X_val_path\", type=_make_parent_dirs_and_return_path, required=True,
+          default=argparse.SUPPRESS)\n_parser.add_argument(\"--y-val\", dest=\"y_val_path\",
+          type=_make_parent_dirs_and_return_path, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"--X-test\",
+          dest=\"X_test_path\", type=_make_parent_dirs_and_return_path, required=True,
+          default=argparse.SUPPRESS)\n_parser.add_argument(\"--y-test\", dest=\"y_test_path\",
+          type=_make_parent_dirs_and_return_path, required=True, default=argparse.SUPPRESS)\n_parsed_args
+          = vars(_parser.parse_args())\n\n_outputs = prepare_data(**_parsed_args)\n"],
+          "image": "python:3.7"}}, "inputs": [{"name": "url", "type": "String"}],
+          "name": "Prepare data", "outputs": [{"name": "X_train", "type": "PKL"},
+          {"name": "y_train", "type": "PKL"}, {"name": "X_val", "type": "PKL"}, {"name":
+          "y_val", "type": "PKL"}, {"name": "X_test", "type": "PKL"}, {"name": "y_test",
+          "type": "PKL"}]}', pipelines.kubeflow.org/component_ref: '{}', pipelines.kubeflow.org/arguments.parameters: '{"url":
+          "{{inputs.parameters.url}}"}'}
+  - name: train
+    container:
+      args: [--X-train, /tmp/inputs/X_train/data, --y-train, /tmp/inputs/y_train/data,
+        --X-val, /tmp/inputs/X_val/data, --y-val, /tmp/inputs/y_val/data, --clf, /tmp/outputs/clf/data]
+      command:
+      - sh
+      - -c
+      - (PIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location
+        'scikit-learn==1.0.2' 'joblib==1.1.0' 'pandas==1.3.5' || PIP_DISABLE_PIP_VERSION_CHECK=1
+        python3 -m pip install --quiet --no-warn-script-location 'scikit-learn==1.0.2'
+        'joblib==1.1.0' 'pandas==1.3.5' --user) && "$0" "$@"
+      - sh
+      - -ec
+      - |
+        program_path=$(mktemp)
+        printf "%s" "$0" > "$program_path"
+        python3 -u "$program_path" "$@"
+      - |
+        def _make_parent_dirs_and_return_path(file_path: str):
+            import os
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            return file_path
+
+        def train(
+            X_train_path,
+            y_train_path,
+            X_val_path,
+            y_val_path,
+            clf_path,
+        ):
+            from sklearn.preprocessing import OneHotEncoder
+            from sklearn.pipeline import Pipeline
+            from sklearn.linear_model import LinearRegression
+            from sklearn.compose import ColumnTransformer
+            from sklearn.metrics import r2_score
+            import joblib
+
+            # Load data from the previous steps
+            X_train = joblib.load(X_train_path)
+            y_train = joblib.load(y_train_path)
+            X_val = joblib.load(X_val_path)
+            y_val = joblib.load(y_val_path)
+
+            # Do some feature engineering tasks
+            categorical_features = X_train.loc[:, X_train.dtypes == object].columns
+
+            categorical_transformer = OneHotEncoder()
+
+            preprocessor = ColumnTransformer(
+                transformers=[
+                    ("cat", categorical_transformer, categorical_features),
+                ],
+                remainder="passthrough",
+            )
+
+            # Define the sklearn pipeline and fit it
+            clf = Pipeline(
+                steps=[("preprocessor", preprocessor), ("regressor", LinearRegression())]
+            )
+
+            clf.fit(X_train, y_train)
+
+            # Make prediction on the val data
+            y_val_pred = clf.predict(X_val)
+            # Evaluate on the val data
+            print("r2_score: ", r2_score(y_val, y_val_pred))
+
+            joblib.dump(clf, clf_path)
+
+        import argparse
+        _parser = argparse.ArgumentParser(prog='Train', description='')
+        _parser.add_argument("--X-train", dest="X_train_path", type=str, required=True, default=argparse.SUPPRESS)
+        _parser.add_argument("--y-train", dest="y_train_path", type=str, required=True, default=argparse.SUPPRESS)
+        _parser.add_argument("--X-val", dest="X_val_path", type=str, required=True, default=argparse.SUPPRESS)
+        _parser.add_argument("--y-val", dest="y_val_path", type=str, required=True, default=argparse.SUPPRESS)
+        _parser.add_argument("--clf", dest="clf_path", type=_make_parent_dirs_and_return_path, required=True, default=argparse.SUPPRESS)
+        _parsed_args = vars(_parser.parse_args())
+
+        _outputs = train(**_parsed_args)
+      image: python:3.7
+    inputs:
+      artifacts:
+      - {name: prepare-data-X_train, path: /tmp/inputs/X_train/data}
+      - {name: prepare-data-X_val, path: /tmp/inputs/X_val/data}
+      - {name: prepare-data-y_train, path: /tmp/inputs/y_train/data}
+      - {name: prepare-data-y_val, path: /tmp/inputs/y_val/data}
+    outputs:
+      artifacts:
+      - {name: train-clf, path: /tmp/outputs/clf/data}
+    metadata:
+      labels:
+        pipelines.kubeflow.org/kfp_sdk_version: 1.8.22
+        pipelines.kubeflow.org/pipeline-sdk-type: kfp
+        pipelines.kubeflow.org/enable_caching: "true"
+      annotations: {pipelines.kubeflow.org/component_spec: '{"implementation": {"container":
+          {"args": ["--X-train", {"inputPath": "X_train"}, "--y-train", {"inputPath":
+          "y_train"}, "--X-val", {"inputPath": "X_val"}, "--y-val", {"inputPath":
+          "y_val"}, "--clf", {"outputPath": "clf"}], "command": ["sh", "-c", "(PIP_DISABLE_PIP_VERSION_CHECK=1
+          python3 -m pip install --quiet --no-warn-script-location ''scikit-learn==1.0.2''
+          ''joblib==1.1.0'' ''pandas==1.3.5'' || PIP_DISABLE_PIP_VERSION_CHECK=1 python3
+          -m pip install --quiet --no-warn-script-location ''scikit-learn==1.0.2''
+          ''joblib==1.1.0'' ''pandas==1.3.5'' --user) && \"$0\" \"$@\"", "sh", "-ec",
+          "program_path=$(mktemp)\nprintf \"%s\" \"$0\" > \"$program_path\"\npython3
+          -u \"$program_path\" \"$@\"\n", "def _make_parent_dirs_and_return_path(file_path:
+          str):\n    import os\n    os.makedirs(os.path.dirname(file_path), exist_ok=True)\n    return
+          file_path\n\ndef train(\n    X_train_path,\n    y_train_path,\n    X_val_path,\n    y_val_path,\n    clf_path,\n):\n    from
+          sklearn.preprocessing import OneHotEncoder\n    from sklearn.pipeline import
+          Pipeline\n    from sklearn.linear_model import LinearRegression\n    from
+          sklearn.compose import ColumnTransformer\n    from sklearn.metrics import
+          r2_score\n    import joblib\n\n    # Load data from the previous steps\n    X_train
+          = joblib.load(X_train_path)\n    y_train = joblib.load(y_train_path)\n    X_val
+          = joblib.load(X_val_path)\n    y_val = joblib.load(y_val_path)\n\n    #
+          Do some feature engineering tasks\n    categorical_features = X_train.loc[:,
+          X_train.dtypes == object].columns\n\n    categorical_transformer = OneHotEncoder()\n\n    preprocessor
+          = ColumnTransformer(\n        transformers=[\n            (\"cat\", categorical_transformer,
+          categorical_features),\n        ],\n        remainder=\"passthrough\",\n    )\n\n    #
+          Define the sklearn pipeline and fit it\n    clf = Pipeline(\n        steps=[(\"preprocessor\",
+          preprocessor), (\"regressor\", LinearRegression())]\n    )\n\n    clf.fit(X_train,
+          y_train)\n\n    # Make prediction on the val data\n    y_val_pred = clf.predict(X_val)\n    #
+          Evaluate on the val data\n    print(\"r2_score: \", r2_score(y_val, y_val_pred))\n\n    joblib.dump(clf,
+          clf_path)\n\nimport argparse\n_parser = argparse.ArgumentParser(prog=''Train'',
+          description='''')\n_parser.add_argument(\"--X-train\", dest=\"X_train_path\",
+          type=str, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"--y-train\",
+          dest=\"y_train_path\", type=str, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"--X-val\",
+          dest=\"X_val_path\", type=str, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"--y-val\",
+          dest=\"y_val_path\", type=str, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"--clf\",
+          dest=\"clf_path\", type=_make_parent_dirs_and_return_path, required=True,
+          default=argparse.SUPPRESS)\n_parsed_args = vars(_parser.parse_args())\n\n_outputs
+          = train(**_parsed_args)\n"], "image": "python:3.7"}}, "inputs": [{"name":
+          "X_train", "type": "PKL"}, {"name": "y_train", "type": "PKL"}, {"name":
+          "X_val", "type": "PKL"}, {"name": "y_val", "type": "PKL"}], "name": "Train",
+          "outputs": [{"name": "clf", "type": "Model"}]}', pipelines.kubeflow.org/component_ref: '{}'}
+  - name: visualize
+    container:
+      args: [--X-test, /tmp/inputs/X_test/data, --y-test, /tmp/inputs/y_test/data,
+        --y-test-pred, /tmp/inputs/y_test_pred/data, --mlpipeline-ui-metadata, /tmp/outputs/mlpipeline_ui_metadata/data]
+      command:
+      - sh
+      - -c
+      - (PIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location
+        'matplotlib==3.5.1' 'joblib==1.1.0' 'pandas==1.3.5' || PIP_DISABLE_PIP_VERSION_CHECK=1
+        python3 -m pip install --quiet --no-warn-script-location 'matplotlib==3.5.1'
+        'joblib==1.1.0' 'pandas==1.3.5' --user) && "$0" "$@"
+      - sh
+      - -ec
+      - |
+        program_path=$(mktemp)
+        printf "%s" "$0" > "$program_path"
+        python3 -u "$program_path" "$@"
+      - |
+        def _make_parent_dirs_and_return_path(file_path: str):
+            import os
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            return file_path
+
+        def visualize(
+            X_test_path,
+            y_test_path,
+            y_test_pred_path,
+            mlpipeline_ui_metadata_path,
+        ):
+            import joblib
+            import matplotlib.pyplot as plt
+            import base64
+            from io import BytesIO
+            import json
+
+            # Load data from the previous step
+            X_test = joblib.load(X_test_path)
+            y_test = joblib.load(y_test_path)
+            y_test_pred = joblib.load(y_test_pred_path)
+
+            ncols = 4
+            nrows = 3
+
+            fig, axs = plt.subplots(
+                ncols=ncols, nrows=nrows, figsize=(10, 5), constrained_layout=True
+            )
+
+            for row in range(nrows):
+                for col in range(ncols):
+                    # Corresponding feature index to this subplot
+                    feature_index = row * nrows + col
+                    axs[row, col].scatter(X_test.iloc[:, feature_index], y_test, color="red")
+                    axs[row, col].scatter(
+                        X_test.iloc[:, feature_index], y_test_pred, color="blue"
+                    )
+                    axs[row, col].set_title(X_test.columns[feature_index])
+
+            fig.suptitle("Test data")
+
+            # Ref: https://stackoverflow.com/questions/48717794/matplotlib-embed-figures-in-auto-generated-html
+            tmpfile = BytesIO()
+            fig.savefig(tmpfile, format="png")
+            encoded = base64.b64encode(tmpfile.getvalue()).decode("utf-8")
+            html = "<img src='data:image/png;base64,{}'>".format(encoded)
+
+            with open("test.html", "w") as f:
+                f.write(html)
+
+            metadata = {
+                "outputs": [
+                    {
+                        "type": "web-app",
+                        "storage": "inline",
+                        "source": html,
+                    }
+                ]
+            }
+
+            with open(mlpipeline_ui_metadata_path, "w") as metadata_file:
+                json.dump(metadata, metadata_file)
+
+        import argparse
+        _parser = argparse.ArgumentParser(prog='Visualize', description='')
+        _parser.add_argument("--X-test", dest="X_test_path", type=str, required=True, default=argparse.SUPPRESS)
+        _parser.add_argument("--y-test", dest="y_test_path", type=str, required=True, default=argparse.SUPPRESS)
+        _parser.add_argument("--y-test-pred", dest="y_test_pred_path", type=str, required=True, default=argparse.SUPPRESS)
+        _parser.add_argument("--mlpipeline-ui-metadata", dest="mlpipeline_ui_metadata_path", type=_make_parent_dirs_and_return_path, required=True, default=argparse.SUPPRESS)
+        _parsed_args = vars(_parser.parse_args())
+
+        _outputs = visualize(**_parsed_args)
+      image: python:3.7
+    inputs:
+      artifacts:
+      - {name: prepare-data-X_test, path: /tmp/inputs/X_test/data}
+      - {name: prepare-data-y_test, path: /tmp/inputs/y_test/data}
+      - {name: evaluate-y_test_pred, path: /tmp/inputs/y_test_pred/data}
+    outputs:
+      artifacts:
+      - {name: mlpipeline-ui-metadata, path: /tmp/outputs/mlpipeline_ui_metadata/data}
+    metadata:
+      labels:
+        pipelines.kubeflow.org/kfp_sdk_version: 1.8.22
+        pipelines.kubeflow.org/pipeline-sdk-type: kfp
+        pipelines.kubeflow.org/enable_caching: "true"
+      annotations: {pipelines.kubeflow.org/component_spec: '{"implementation": {"container":
+          {"args": ["--X-test", {"inputPath": "X_test"}, "--y-test", {"inputPath":
+          "y_test"}, "--y-test-pred", {"inputPath": "y_test_pred"}, "--mlpipeline-ui-metadata",
+          {"outputPath": "mlpipeline_ui_metadata"}], "command": ["sh", "-c", "(PIP_DISABLE_PIP_VERSION_CHECK=1
+          python3 -m pip install --quiet --no-warn-script-location ''matplotlib==3.5.1''
+          ''joblib==1.1.0'' ''pandas==1.3.5'' || PIP_DISABLE_PIP_VERSION_CHECK=1 python3
+          -m pip install --quiet --no-warn-script-location ''matplotlib==3.5.1'' ''joblib==1.1.0''
+          ''pandas==1.3.5'' --user) && \"$0\" \"$@\"", "sh", "-ec", "program_path=$(mktemp)\nprintf
+          \"%s\" \"$0\" > \"$program_path\"\npython3 -u \"$program_path\" \"$@\"\n",
+          "def _make_parent_dirs_and_return_path(file_path: str):\n    import os\n    os.makedirs(os.path.dirname(file_path),
+          exist_ok=True)\n    return file_path\n\ndef visualize(\n    X_test_path,\n    y_test_path,\n    y_test_pred_path,\n    mlpipeline_ui_metadata_path,\n):\n    import
+          joblib\n    import matplotlib.pyplot as plt\n    import base64\n    from
+          io import BytesIO\n    import json\n\n    # Load data from the previous
+          step\n    X_test = joblib.load(X_test_path)\n    y_test = joblib.load(y_test_path)\n    y_test_pred
+          = joblib.load(y_test_pred_path)\n\n    ncols = 4\n    nrows = 3\n\n    fig,
+          axs = plt.subplots(\n        ncols=ncols, nrows=nrows, figsize=(10, 5),
+          constrained_layout=True\n    )\n\n    for row in range(nrows):\n        for
+          col in range(ncols):\n            # Corresponding feature index to this
+          subplot\n            feature_index = row * nrows + col\n            axs[row,
+          col].scatter(X_test.iloc[:, feature_index], y_test, color=\"red\")\n            axs[row,
+          col].scatter(\n                X_test.iloc[:, feature_index], y_test_pred,
+          color=\"blue\"\n            )\n            axs[row, col].set_title(X_test.columns[feature_index])\n\n    fig.suptitle(\"Test
+          data\")\n\n    # Ref: https://stackoverflow.com/questions/48717794/matplotlib-embed-figures-in-auto-generated-html\n    tmpfile
+          = BytesIO()\n    fig.savefig(tmpfile, format=\"png\")\n    encoded = base64.b64encode(tmpfile.getvalue()).decode(\"utf-8\")\n    html
+          = \"<img src=''data:image/png;base64,{}''>\".format(encoded)\n\n    with
+          open(\"test.html\", \"w\") as f:\n        f.write(html)\n\n    metadata
+          = {\n        \"outputs\": [\n            {\n                \"type\": \"web-app\",\n                \"storage\":
+          \"inline\",\n                \"source\": html,\n            }\n        ]\n    }\n\n    with
+          open(mlpipeline_ui_metadata_path, \"w\") as metadata_file:\n        json.dump(metadata,
+          metadata_file)\n\nimport argparse\n_parser = argparse.ArgumentParser(prog=''Visualize'',
+          description='''')\n_parser.add_argument(\"--X-test\", dest=\"X_test_path\",
+          type=str, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"--y-test\",
+          dest=\"y_test_path\", type=str, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"--y-test-pred\",
+          dest=\"y_test_pred_path\", type=str, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"--mlpipeline-ui-metadata\",
+          dest=\"mlpipeline_ui_metadata_path\", type=_make_parent_dirs_and_return_path,
+          required=True, default=argparse.SUPPRESS)\n_parsed_args = vars(_parser.parse_args())\n\n_outputs
+          = visualize(**_parsed_args)\n"], "image": "python:3.7"}}, "inputs": [{"name":
+          "X_test", "type": "PKL"}, {"name": "y_test", "type": "PKL"}, {"name": "y_test_pred",
+          "type": "PKL"}], "name": "Visualize", "outputs": [{"name": "mlpipeline_ui_metadata"}]}',
+        pipelines.kubeflow.org/component_ref: '{}'}
+  arguments:
+    parameters:
+    - {name: url}
+  serviceAccountName: pipeline-runner

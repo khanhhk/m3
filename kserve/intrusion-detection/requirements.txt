@@ -1,0 +1,10 @@
+loguru==0.7.2
+requests==2.31.0
+kserve==0.7.0
+alibi-detect[tensorflow]==0.11.4
+tensorflow==2.11.0
+fastapi==0.74.1
+typing-extensions==4.7.1
+protobuf==3.19.6
+numpy==1.20.0
+locust==2.18.1

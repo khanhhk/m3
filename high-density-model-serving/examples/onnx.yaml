@@ -1,0 +1,11 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: example-onnx-mnist
+  annotations:
+    serving.kserve.io/deploymentMode: ModelMesh
+    serving.kserve.io/secretKey: localMinIO
+spec:
+  predictor:
+    onnx:
+      storageUri: s3://modelmesh-example-models/onnx/mnist.onnx

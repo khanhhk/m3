@@ -1,0 +1,44 @@
+import numpy as np
+from PIL import Image
+from ultralytics import YOLO
+
+from plot import plot_bboxes
+
+IMAGE_PATH = "images/bus.jpg"
+DRAWED_PATH = "images/output.jpg"
+MODEL_OUTPUT_PATH = "weights"
+
+
+def main():
+    model = YOLO("yolov8n.pt")
+
+    # Get predictions
+    results = model(source=IMAGE_PATH)
+
+    # Export model
+    # We set dynamic to enable dynamic batching,
+    # and simplify to infer the whole computation graph
+    # and replace redundant ops with constants (constant folding)
+    path = model.export(
+        format="onnx",
+        opset=14,  # Use half=True will be conflict
+        simplify=False,
+        dynamic=True,
+        half=False
+    )
+    print(f"Model has been exported to {path}")
+
+    # Plot the results
+    image = Image.open(IMAGE_PATH)
+    image = np.asarray(image)
+    plot_bboxes(
+        image,
+        results[0].boxes.data,
+        score=False,
+        conf=0.85,
+        output_path=DRAWED_PATH,
+    )
+
+
+if __name__ == "__main__":
+    main()

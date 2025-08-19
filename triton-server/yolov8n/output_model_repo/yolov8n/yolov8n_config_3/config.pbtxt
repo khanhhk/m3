@@ -1,0 +1,30 @@
+name: "yolov8n"
+version_policy {
+  specific {
+    versions: 1
+    versions: 2
+  }
+}
+max_batch_size: 2
+input {
+  name: "images"
+  data_type: TYPE_FP32
+  dims: 3
+  dims: 640
+  dims: 640
+}
+output {
+  name: "output0"
+  data_type: TYPE_FP32
+  dims: -1
+  dims: -1
+}
+instance_group {
+  count: 2
+  kind: KIND_GPU
+}
+dynamic_batching {
+}
+backend: "onnxruntime"
+response_cache {
+}

@@ -1,0 +1,4 @@
+timeseries-generator==0.1.0
+scipy==1.11.3
+alibi==0.9.1
+alibi-detect[tensorflow]==0.11.1

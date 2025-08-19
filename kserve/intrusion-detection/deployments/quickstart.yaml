@@ -1,0 +1,20 @@
+apiVersion: "serving.kserve.io/v1beta1"
+kind: "InferenceService"
+metadata:
+  name: "sklearn-iris"
+spec:
+  predictor:
+    # Define number of pods
+    # minReplicas: 1
+    # Batch requests, similar to BentoML
+    # batcher:
+    #   maxBatchSize: 16
+    #   maxLatency: 300
+    sklearn:
+      # Use this command to get the model `gsutil cp -r gs://kfserving-examples/models/sklearn/1.0/model .`
+      # , you should see the output `Copying gs://kfserving-examples/models/sklearn/1.0/model/model.joblib...`
+      # Ref: https://github.com/kserve/kserve/blob/master/docs/samples/logger/local/README.md
+      storageUri: "gs://kfserving-examples/models/sklearn/1.0/model"
+      # You can also switch to S3: storageUri: s3://bucket/sklearn/mnist.joblib
+# Switch to protocol version 2 for better performance and standardization among serving runtimes
+# https://github.com/kserve/kserve/blob/master/docs/samples/v1beta1/sklearn/v2/sklearn.yaml

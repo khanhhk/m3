@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mylogging-endpoint
+  namespace: eventing-test # In production, please use a specific namespace for monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mylogging-endpoint
+  template:
+    metadata:
+      labels:
+        app: mylogging-endpoint # Labels for all the pods the deployment is managing
+    spec:
+      containers:
+        - name: mylogging-endpoint
+          image: quandvrobusto/mylogging-endpoint:1.0.1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mylogging-endpoint-svc
+  labels:
+    app: mylogging-endpoint
+  namespace: eventing-test
+spec:
+  selector:
+    app: mylogging-endpoint
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 8000
+  type: ClusterIP
+---
+apiVersion: eventing.knative.dev/v1
+kind: Trigger
+metadata:
+  name: mylogging
+  namespace: eventing-test
+spec:
+  broker: default
+  # filter:
+  #   attributes:
+  #     type: io.seldon.serving.inference.response # Enable it to filter seldon event only
+  subscriber:
+    ref:
+      apiVersion: v1
+      kind: Service
+      name: mylogging-endpoint-svc # Service hello-display subscribes to the broker `default`
+    uri: /
