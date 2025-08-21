@@ -4,17 +4,44 @@
 [Kustomize](https://kubectl.docs.kubernetes.io/) is another tool to install applications on k8s beside Helm. Let's install it first.
 
 ```shell
-curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+curl -H "Authorization: token YOUR_GITHUB_TOKEN" \
+     https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh | bash
 sudo mv kustomize /usr/local/bin/
+```
+
+## Create cluster via kind
+```shell
+[ $(uname -m) = x86_64 ] && curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.29.0/kind-linux-amd64
+sudo mv ./kind /usr/local/bin/kind
+sudo chmod +x /usr/local/bin/kind
+kind create cluster --image kindest/node:v1.24.15@sha256:7db4f8bea3e14b82d12e044e25e34bd53754b7f2b0e9d56df21774e6f66a70ab --name kubeflow
 ```
 
 ## Install Kubeflow
 Clone the manifests repository. I did this step already for you so you don't have to redo this. I just want to show you what I did.
 ```shell
-RELEASE=v1.7.0-rc.1
+RELEASE=v1.7.0-rc.0
 git clone -b $RELEASE --depth 1 --single-branch https://github.com/kubeflow/manifests.git
 cd manifests
 while ! kustomize build example | kubectl apply -f -; do echo "Retrying to apply resources"; sleep 10; done
+```
+
+## Fix bug istio-system
+Check by `kubectl get pod -A`.
+```shell
+cd ..
+git clone https://github.com/arrikto/oidc-authservice.git
+cd oidc-authservice
+make docker-build
+docker tag gcr.io/arrikto-playground/kubeflow/oidc-authservice:0c4ea9a hoangkimkhanh1907/oidc-authservice:e236439
+docker push hoangkimkhanh1907/oidc-authservice:e236439
+```
+
+Open `manifests/common/oidc-authservice/base/statefulset.yaml` and change the name of image `gcr.io/arrikto/kubeflow/oidc-authservice:e236439` to `hoangkimkhanh1907/oidc-authservice:e236439`. Now, run:
+```shell
+kubectl delete pod authservice-0 -n istio-system
+while ! kustomize build example | kubectl apply -f -; do echo "Retrying to apply resources"; sleep 10; done
+kubectl describe pod authservice-0 -n istio-system
 ```
 
 ## Install KServe

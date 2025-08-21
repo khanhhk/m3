@@ -3,8 +3,9 @@
 ### Prerequisites
 Create a virtual environment using conda and install necessary packages
 ```shell
-conda install -n bentoml python==3.9
+conda create -n bentoml python==3.11
 conda activate bentoml
+pip install -r requirements.txt
 ```
 
 ### Local development
