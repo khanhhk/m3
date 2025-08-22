@@ -5,7 +5,7 @@ metadata:
 spec:
   predictor:
     # Define number of pods
-    # minReplicas: 1
+    minReplicas: 0
     # Batch requests, similar to BentoML
     # batcher:
     #   maxBatchSize: 16
